@@ -21,9 +21,9 @@ function [x_eq] = ecualizador(x_original, x_procesada, fs_procesada, opcion, G_d
     H = F0 + F1 + F2 + F3 + F4 + F5;
 
     if opcion == 'd'
-        X_eq = X .* H';
-    else
         X_eq = X .* H;
+    else
+        X_eq = X .* H';
     end
 
     x_eq = real(ifft(ifftshift(X_eq)));

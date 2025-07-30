@@ -1,5 +1,5 @@
 function audio_gui()
-    % Crear figura principal
+    % Cremos figura principal
     fig = uifigure('Name','Procesamiento Audio','Position',[100 100 950 600]);
 
     % --- Entrada de nombre de archivo ---
@@ -49,6 +49,10 @@ function audio_gui()
     % Label para mostrar frecuencia de muestreo después de conversión
     lblFsConvertida = uilabel(fig, 'Position', [20 80 400 22], 'Text', '');
 
+    % Callbacks
+    btnCargar.ButtonPushedFcn = @(btn,event) cargarAudio();
+    btnReproducir.ButtonPushedFcn = @(btn,event) reproducirAudio();
+    btnProcesar.ButtonPushedFcn = @(btn,event) procesarAudio();
 
     % Ejes para graficar señal y espectro
     ax1 = uiaxes(fig,'Position',[440 290 490 200]);
@@ -60,26 +64,21 @@ function audio_gui()
     % Variables para guardar audio y fs
     data = struct('x',[],'fs',[],'x_proc',[],'fs_proc',[],'x_eq',[]);
 
-    % Callbacks
-    btnCargar.ButtonPushedFcn = @(btn,event) cargarAudio();
-    btnReproducir.ButtonPushedFcn = @(btn,event) reproducirAudio();
-    btnProcesar.ButtonPushedFcn = @(btn,event) procesarAudio();
 
-    % Función cargar audio
+    %% Función para cargar audio
     function cargarAudio()
         archivo = edtArchivo.Value;
         if isempty(archivo)
             uialert(fig,'Debe ingresar el nombre del archivo.','Error');
             return;
         end
-        if ~isfile(archivo)
-            uialert(fig,sprintf('El archivo "%s" no existe.', archivo),'Error');
+    
+        % Aquí llamamos a la función personalizada lectura_audio
+        try
+            [audioData, fs, ] = lectura_audio(archivo);
+        catch ME
+            uialert(fig,sprintf('Error al leer el archivo: %s', ME.message),'Error');
             return;
-        end
-
-        [audioData, fs] = audioread(archivo);
-        if size(audioData, 2) == 2
-            audioData = mean(audioData, 2); % mono
         end
 
         data.x = audioData;
@@ -88,21 +87,21 @@ function audio_gui()
         data.fs_proc = [];
         data.x_eq = [];
 
-        % Actualizar etiquetas info
+        % Actualizar las etiquetas dee informacion
         lblNombre.Text = sprintf('Nombre: %s', archivo);
         lblDuracion.Text = sprintf('Duración: %.2f segundos', length(audioData)/fs);
         lblFs.Text = sprintf('Frecuencia de muestreo: %.2f Hz', fs);
 
-        % Marcar checkbox y activar botón reproducir y procesar
+        % Marcamos checkbox y activar botón reproducir y procesar
         chkCargado.Value = true;
         btnReproducir.Enable = 'on';
         btnProcesar.Enable = 'on';
 
-        % Mostrar señal y espectro original
+        % Mostramos señal y espectro original
         plotSignalAndSpectrum(ax1, ax2, data.x, data.fs);
     end
 
-    % Función reproducir audio cargado
+    %% Función reproducir audio cargado
     function reproducirAudio()
         if isempty(data.x)
             uialert(fig,'Primero cargue un archivo.','Error');
@@ -111,7 +110,8 @@ function audio_gui()
         sound(data.x, data.fs);
     end
 
-    % Función procesar audio (igual que tu original, pero sin reproducir al cargar)
+
+    %% Función procesar audio 
     function procesarAudio()
         if isempty(data.x)
             uialert(fig,'Primero cargue un archivo.','Error');
@@ -130,10 +130,12 @@ function audio_gui()
             uialert(fig,'Ingrese un factor entero positivo válido.','Error');
             return;
         end
-
+        
+        % llamamos a la funcion conversion de muestreo
         [x_proc, fs_proc] = conversion_muestreo(data.x, data.fs, tipo_proc, factor);
         data.x_proc = x_proc;
         data.fs_proc = fs_proc;
+
         % Mostrar en interfaz gráfica el resultado de muestreo
         lblFsConvertida.Text = sprintf('Frecuencia de muestreo después de %s: %.2f Hz', tipo_proc, fs_proc);
 
@@ -144,24 +146,25 @@ function audio_gui()
             G_dB(i) = sliders(i).Value;
         end
 
-        % Llamar ecualizador pasando ganancias
+        % Llamamos a la funcion ecualizador pasando las ganancias
         data.x_eq = ecualizador(data.x, data.x_proc, data.fs_proc, tipo(1), G_dB);
 
-        % Reproducir procesado y ecualizado
+        % Reproducimos los audios procesados y ecualizados
         sound(data.x_proc, data.fs_proc);
         pause(length(data.x_proc)/data.fs_proc + 0.5);
         sound(data.x_eq, data.fs_proc);
 
-        % Actualizar info en interfaz (solo mensaje general)
+        % Actualizamos la info en interfaz (solo mensaje general)
         lblInfo.Text = sprintf('%s aplicado. Nueva Fs = %.2f Hz', ddOpc.Value, fs_proc);
         
-        % Graficar procesado y ecualizado en nueva figura
+        % Graficamos el procesado y ecualizado en una nueva figura
         plotSignalsComparison();
 
-        % Actualizar gráficos en paneles
+        % Actualizamos los gráficos en los paneles
         plotSignalAndSpectrum(ax1, ax2, data.x_eq, data.fs_proc);
     end
-
+    
+    %% Funcion para graficar
     function plotSignalAndSpectrum(axSignal, axSpec, signal, fs)
         % Señal
         t = (0:length(signal)-1)/fs;
@@ -182,16 +185,18 @@ function audio_gui()
         axSpec.YLabel.String = 'Magnitud Normalizada';
         grid(axSpec,'on');
     end
-
+    
+    %% Funcino para graficar
     function plotSignalsComparison()
         figure('Name','Comparación de Señales','NumberTitle','off','Position',[100 100 700 600]);
+        %Original
         subplot(3,1,1);
         plot((0:length(data.x)-1)/data.fs, data.x);
         title('Original');
         xlabel('Tiempo [s]');
         ylabel('Amplitud');
         grid on;
-
+        %Procesada
         subplot(3,1,2);
         plot((0:length(data.x_proc)-1)/data.fs_proc, data.x_proc);
         title('Procesada');
@@ -199,6 +204,7 @@ function audio_gui()
         ylabel('Amplitud');
         grid on;
 
+        %Ecualizada
         subplot(3,1,3);
         plot((0:length(data.x_eq)-1)/data.fs_proc, data.x_eq);
         title('Ecualizada');
